@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { useDocumentFilters } from '../hooks/useDocumentFilters';
 import { useToggle } from '../hooks/useToggle';
 import DocumentCard from '../components/Documents/DocumentCard';
-import QRLinksDebugger from '../components/Documents/QRLinksDebugger';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import Button from '../components/UI/Button';
 import LinkButton from '../components/UI/LinkButton';
@@ -154,13 +153,6 @@ const DocumentsPage: React.FC = () => {
           {filteredDocuments.map(document => (
             <DocumentCard key={document.id} document={document} />
           ))}
-        </div>
-      )}
-      
-      {/* Debug component for QR IDs */}
-      {hasPermission('supervisor') && (
-        <div className="mt-10">
-          <QRLinksDebugger />
         </div>
       )}
     </div>

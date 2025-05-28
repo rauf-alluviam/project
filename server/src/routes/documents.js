@@ -11,7 +11,7 @@ router.use(protect);
 // Routes with specific role requirements
 router.route('/')
   .get(getDocuments)
-  .post(authorize('admin', 'supervisor'), createDocument);
+  .post(createDocument);
 
 router.route('/:id')
   .get(getDocument)
@@ -20,6 +20,6 @@ router.route('/:id')
 
 router.route('/:id/versions')
   .get(getVersions)
-  .post(authorize('admin', 'supervisor'), uploadVersion);
+  .post(uploadVersion);
 
 export default router;

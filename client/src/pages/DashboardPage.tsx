@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, QrCode, Users, Clock, List, CheckSquare, AlertTriangle, Plus } from 'lucide-react';
+import { FileText, QrCode, Users, Clock, Plus } from 'lucide-react';
 import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import DocumentCard from '../components/Documents/DocumentCard';
@@ -94,7 +94,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="bg-gray-50 px-5 py-3">
             <div className="text-sm">
-              <Link to="/qr-codes" className="font-medium text-teal-700 hover:text-teal-900">
+              <Link to="/documents" className="font-medium text-teal-700 hover:text-teal-900">
                 View all
               </Link>
             </div>
@@ -207,65 +207,6 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
-      {hasPermission('supervisor') && (
-        <div>
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Tasks</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <LinkButton
-              to="/documents/new"
-              variant="secondary"
-              size="md"
-              className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col items-center text-center"
-            >
-              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 mb-3">
-                <Plus size={24} />
-              </div>
-              <h3 className="text-sm font-medium text-gray-900">Add Document</h3>
-              <p className="mt-1 text-xs text-gray-500">Upload new documentation</p>
-            </LinkButton>
-            
-            <LinkButton
-              to="/qr-codes"
-              variant="secondary"
-              size="md"
-              className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col items-center text-center"
-            >
-              <div className="h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 mb-3">
-                <QrCode size={24} />
-              </div>
-              <h3 className="text-sm font-medium text-gray-900">Generate QR</h3>
-              <p className="mt-1 text-xs text-gray-500">Create new QR codes</p>
-            </LinkButton>
-            
-            <LinkButton
-              to="/documents"
-              variant="secondary"
-              size="md"
-              className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col items-center text-center"
-            >
-              <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 mb-3">
-                <CheckSquare size={24} />
-              </div>
-              <h3 className="text-sm font-medium text-gray-900">Manage Documents</h3>
-              <p className="mt-1 text-xs text-gray-500">Update document versions</p>
-            </LinkButton>
-            
-            <LinkButton
-              to="/reports"
-              variant="secondary"
-              size="md"
-              className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col items-center text-center"
-            >
-              <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 mb-3">
-                <List size={24} />
-              </div>
-              <h3 className="text-sm font-medium text-gray-900">View Reports</h3>
-              <p className="mt-1 text-xs text-gray-500">Check document usage</p>
-            </LinkButton>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

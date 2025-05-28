@@ -36,7 +36,6 @@ const MainLayout: React.FC = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <Home size={20} /> },
     { path: '/documents', label: 'Documents', icon: <FileText size={20} /> },
-    { path: '/qr-codes', label: 'QR Codes', icon: <QrCode size={20} /> },
     { path: '/users', label: 'Users', icon: <Users size={20} />, adminOnly: true },
     { path: '/reports', label: 'Reports', icon: <BarChart2 size={20} />, supervisorOnly: true }
   ];

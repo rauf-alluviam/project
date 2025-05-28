@@ -1,6 +1,7 @@
 export type Role = 'admin' | 'supervisor' | 'user'; // Backend uses 'user' instead of 'employee'
 
 export interface User {
+  name(arg0: string, id: string, name: any, role: string): unknown;
   id: string;
   username: string; // Backend uses 'username' instead of 'name'
   email: string;

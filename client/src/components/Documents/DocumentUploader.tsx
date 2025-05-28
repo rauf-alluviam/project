@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Upload, X, File, RefreshCw } from 'lucide-react';
-import { useDocuments } from '../../context/DocumentContext';
 import { useAuth } from '../../context/AuthContext';
 import { validateFile, formatFileSize, getFileExtension } from '../../utils/fileUtils';
 import { ALLOWED_FILE_TYPES } from '../../constants';
+import { apiService } from '../../services/api';
 import Alert from '../UI/Alert';
-import Input from '../UI/Input';
 import Button from '../UI/Button';
 
 interface DocumentUploaderProps {
@@ -17,11 +16,9 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   documentId, 
   onUploadComplete 
 }) => {
-  const { addDocumentVersion } = useDocuments();
   const { user } = useAuth();
   
   const [file, setFile] = useState<File | null>(null);
-  const [versionNumber, setVersionNumber] = useState(1);
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,32 +86,12 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
       // Create FormData for file upload
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('documentId', documentId);
-      formData.append('versionNumber', versionNumber.toString());
       formData.append('notes', notes);
       
-      // Upload file to backend
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/files/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
+      // Upload file using the API service
+      await apiService.uploadDocumentVersion(documentId, formData);
       
-      if (!response.ok) {
-        throw new Error('Failed to upload file');
-      }
-      
-      const { fileUrl } = await response.json();
-      
-      await addDocumentVersion(documentId, {
-        versionNumber,
-        fileUrl,
-        notes,
-        createdBy: user.id
-      });
-      
+      // The uploadDocumentVersion should handle the version creation on the backend
       // Reset form
       setFile(null);
       setNotes('');
@@ -190,18 +167,6 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
         )}
         
-        {documentId && (
-          <div className="mt-4">
-            <Input
-              type="number"
-              id="version-number"
-              label="Version Number"
-              value={versionNumber.toString()}
-              onChange={(e) => setVersionNumber(parseInt(e.target.value))}
-              min={1}
-            />
-          </div>
-        )}
         
         <div className="mt-4">
           <label

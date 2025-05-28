@@ -5,7 +5,6 @@ import { useDocuments } from '../context/DocumentContext';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import LinkButton from '../components/UI/LinkButton';
-import Button from '../components/UI/Button';
 import Badge from '../components/UI/Badge';
 
 const DocumentViewerPage: React.FC = () => {
@@ -13,20 +12,97 @@ const DocumentViewerPage: React.FC = () => {
   const { getDocumentByQrId, recordScan, loading } = useDocuments();
   const { user, isAuthenticated } = useAuth();
   const [scanRecorded, setScanRecorded] = useState(false);
+  const [fileError, setFileError] = useState(false);
+  const [fileLoading, setFileLoading] = useState(true);
+  
+  // Move all hook calls to the top, before any conditional logic
+  useEffect(() => {
+    if (qrId && user && !scanRecorded && isAuthenticated) {
+      const document = getDocumentByQrId(qrId);
+      if (document) {
+        recordScan(
+          document.id || '',
+          user.id,
+          user.name,
+          user.role
+        ).then(() => {
+          setScanRecorded(true);
+        });
+      }
+    }
+  }, [qrId, user, recordScan, getDocumentByQrId, scanRecorded, isAuthenticated]);
+
+  // Get document and file URL
+  const document = qrId ? getDocumentByQrId(qrId) : null;
+  
+  // Handle both new version structure and legacy direct file storage
+  const latestVersion = document?.versions && document.versions.length > 0 
+    ? document.versions.reduce((latest, current) => 
+        current.versionNumber > latest.versionNumber ? current : latest, document.versions[0])
+    : null;
+  
+  // Get file URL from either the latest version or directly from document
+  const documentData = document as any;
+  let fileUrl = latestVersion?.fileUrl || documentData?.file_url || documentData?.fileUrl;
+  
+  // Construct the full URL if it's a relative path
+  if (fileUrl && !fileUrl.startsWith('http')) {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const SERVER_BASE_URL = API_BASE_URL.replace('/api', '');
+    fileUrl = SERVER_BASE_URL + fileUrl;
+  }
+  
+  const versionNumber = latestVersion?.versionNumber || documentData?.current_version || 1;
+  
+  // Test file accessibility
+  const testFileAccess = async (url: string) => {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      return response.ok;
+    } catch (error) {
+      console.error('File access test failed:', error);
+      return false;
+    }
+  };
+
+  // Check if URL is localhost (which has CSP issues with iframes)
+  const isLocalhost = fileUrl && (fileUrl.includes('localhost') || fileUrl.includes('127.0.0.1'));
   
   useEffect(() => {
-    if (qrId && user && !scanRecorded) {
-      recordScan(
-        getDocumentByQrId(qrId)?.id || '',
-        user.id,
-        user.name,
-        user.role
-      ).then(() => {
-        setScanRecorded(true);
-      });
+    if (fileUrl) {
+      setFileLoading(true);
+      // Skip accessibility test for localhost due to CSP restrictions
+      if (isLocalhost) {
+        setFileError(false);
+        setFileLoading(false);
+      } else {
+        testFileAccess(fileUrl).then(accessible => {
+          setFileError(!accessible);
+          setFileLoading(false);
+        });
+      }
+    } else {
+      setFileLoading(false);
     }
-  }, [qrId, user, recordScan, getDocumentByQrId, scanRecorded]);
-  
+  }, [fileUrl, isLocalhost]);
+
+  // Helper functions
+  const handleIframeError = () => {
+    setFileError(true);
+    setFileLoading(false);
+  };
+
+  const handleIframeLoad = () => {
+    setFileLoading(false);
+  };
+
+  const getFileExtension = (url: string) => {
+    return url.split('.').pop()?.toLowerCase() || '';
+  };
+
+  const fileExtension = fileUrl ? getFileExtension(fileUrl) : '';
+
+  // NOW handle all the conditional renders after all hooks have been called
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -77,7 +153,6 @@ const DocumentViewerPage: React.FC = () => {
     );
   }
   
-  const document = getDocumentByQrId(qrId);
   console.log("Found document:", document);
   
   if (!document) {
@@ -100,18 +175,16 @@ const DocumentViewerPage: React.FC = () => {
     );
   }
   
-  const latestVersion = document.versions.length > 0 
-    ? document.versions.reduce((latest, current) => 
-        current.versionNumber > latest.versionNumber ? current : latest, document.versions[0])
-    : null;
+  console.log('File URL:', fileUrl);
+  console.log('Document data:', documentData);
   
-  if (!latestVersion) {
+  if (!fileUrl) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
         <div className="text-center">
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500" />
-          <h1 className="mt-4 text-xl font-semibold text-gray-900">No Versions Available</h1>
-          <p className="mt-2 text-gray-600">This document doesn't have any uploaded versions yet</p>
+          <h1 className="mt-4 text-xl font-semibold text-gray-900">File Not Available</h1>
+          <p className="mt-2 text-gray-600">The file for this document is not available or has been moved</p>
           <LinkButton
             to="/"
             variant="primary"
@@ -141,8 +214,8 @@ const DocumentViewerPage: React.FC = () => {
               </LinkButton>
               <div>
                 <h1 className="text-xl font-bold text-gray-900 truncate">{document.title}</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm text-gray-500">Version {latestVersion.versionNumber}</span>
+                <div>
+                  <span className="text-sm text-gray-500">Version {versionNumber}</span>
                   <Badge variant="secondary">{document.department}</Badge>
                   {document.machineId && <Badge variant="primary">Machine: {document.machineId}</Badge>}
                 </div>
@@ -151,7 +224,7 @@ const DocumentViewerPage: React.FC = () => {
             
             <div className="flex space-x-3 mt-3 sm:mt-0">
               <a
-                href={latestVersion.fileUrl}
+                href={fileUrl}
                 download
                 className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
@@ -165,77 +238,207 @@ const DocumentViewerPage: React.FC = () => {
       
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="p-6 flex flex-col items-center justify-center">
-            <FileText className="h-16 w-16 text-blue-700" />
-            <h2 className="mt-4 text-lg font-medium text-gray-900">Document Preview</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              In a real implementation, the document would be displayed here using a PDF or document viewer.
-            </p>
-            <div className="mt-6 w-full max-w-3xl bg-gray-50 border border-gray-200 rounded-lg p-6">
-              {/* Embed the original document if it's a PDF */}
-              {latestVersion.fileUrl && latestVersion.fileUrl.endsWith('.pdf') && (
-                <iframe
-                  src={latestVersion.fileUrl}
-                  title="Document Preview"
-                  width="100%"
-                  height="600px"
-                  className="rounded border border-gray-200 mb-6"
-                />
+          {/* Document Viewer Section */}
+          <div className="p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Document Content</h2>
+            
+            {/* Document Viewer */}
+            <div className="w-full bg-gray-50 border border-gray-200 rounded-lg overflow-hidden relative" style={{ minHeight: '600px' }}>
+              {fileLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
+                  <LoadingSpinner size="lg" text="Loading document..." />
+                </div>
               )}
-              <div className="space-y-4">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-medium text-gray-900">{document.title}</h3>
-                  <p className="mt-1 text-sm text-gray-600">{document.description}</p>
+              
+              {fileError && (
+                <div className="flex flex-col items-center justify-center p-12" style={{ minHeight: '600px' }}>
+                  <AlertTriangle className="h-16 w-16 text-red-500 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Cannot Load Document</h3>
+                  <p className="text-sm text-gray-500 text-center mb-4">
+                    The document could not be loaded. This might be due to CORS restrictions, file permissions, or the file being unavailable.
+                  </p>
+                  <p className="text-xs text-gray-400 mb-6">File URL: {fileUrl}</p>
+                  <a
+                    href={fileUrl}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-700 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download File
+                  </a>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Department</p>
-                    <Badge variant="secondary" className="mt-1">{document.department}</Badge>
-                  </div>
-                  
-                  {document.machineId && (
-                    <div>
-                      <p className="text-gray-500">Machine ID</p>
-                      <Badge variant="primary" className="mt-1">{document.machineId}</Badge>
+              )}
+              
+              {!fileError && fileUrl && (
+                <>
+                  {/* Handle localhost CSP restrictions */}
+                  {isLocalhost ? (
+                    <div className="flex flex-col items-center justify-center p-12" style={{ minHeight: '600px' }}>
+                      <FileText className="h-16 w-16 text-blue-500 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Local Development Mode</h3>
+                      <p className="text-sm text-gray-500 text-center mb-4">
+                        Document preview is not available for localhost due to Content Security Policy restrictions.
+                      </p>
+                      <p className="text-xs text-gray-400 mb-6">File: {fileUrl}</p>
+                      <div className="flex space-x-3">
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-700 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          <FileText className="mr-2 h-4 w-4" />
+                          Open in New Tab
+                        </a>
+                        <a
+                          href={fileUrl}
+                          download
+                          className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Download
+                        </a>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      {/* PDF Viewer - Only for non-localhost */}
+                      {fileExtension === 'pdf' && (
+                        <iframe
+                          src={`${fileUrl}#toolbar=1&navpanes=1&scrollbar=1`}
+                          title="Document Preview"
+                          width="100%"
+                          height="600px"
+                          className="w-full h-full border-0"
+                          style={{ minHeight: '600px' }}
+                          onError={handleIframeError}
+                          onLoad={handleIframeLoad}
+                        />
+                      )}
+                      
+                      {/* Office Documents - Only for non-localhost */}
+                      {(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'].includes(fileExtension)) && (
+                        <iframe
+                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`}
+                          title="Document Preview"
+                          width="100%"
+                          height="600px"
+                          className="w-full h-full border-0"
+                          style={{ minHeight: '600px' }}
+                          onError={handleIframeError}
+                          onLoad={handleIframeLoad}
+                        />
+                      )}
+                      
+                      {/* Text Files - Only for non-localhost */}
+                      {['txt', 'csv', 'log'].includes(fileExtension) && (
+                        <div className="p-6 w-full h-full overflow-auto" style={{ minHeight: '600px' }}>
+                          <iframe
+                            src={fileUrl}
+                            title="Document Preview"
+                            width="100%"
+                            height="100%"
+                            className="w-full h-full border-0 bg-white"
+                            style={{ minHeight: '540px' }}
+                            onError={handleIframeError}
+                            onLoad={handleIframeLoad}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Image Files - These work fine with localhost */}
+                      {(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'].includes(fileExtension)) && (
+                        <div className="flex items-center justify-center p-6" style={{ minHeight: '600px' }}>
+                          <img
+                            src={fileUrl}
+                            alt="Document"
+                            className="max-w-full max-h-full object-contain"
+                            onError={handleIframeError}
+                            onLoad={handleIframeLoad}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Fallback for unsupported file types */}
+                      {!(['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt', 'csv', 'log', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'].includes(fileExtension)) && (
+                        <div className="flex flex-col items-center justify-center p-12" style={{ minHeight: '600px' }}>
+                          <FileText className="h-16 w-16 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Not Available</h3>
+                          <p className="text-sm text-gray-500 text-center mb-2">
+                            File type: {fileExtension.toUpperCase()}
+                          </p>
+                          <p className="text-sm text-gray-500 text-center mb-6">
+                            This file type cannot be previewed in the browser. Please download the file to view its contents.
+                          </p>
+                          <a
+                            href={fileUrl}
+                            download
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-700 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Download File
+                          </a>
+                        </div>
+                      )}
+                    </>
                   )}
-                  
-                  <div>
-                    <p className="text-gray-500">Version</p>
-                    <Badge variant="success" className="mt-1">v{latestVersion.versionNumber}</Badge>
-                  </div>
-                  
-                  <div>
-                    <p className="text-gray-500">Last Updated</p>
-                    <p className="font-medium text-gray-900 mt-1">
-                      {new Date(document.updatedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-                
-                {latestVersion.notes && (
-                  <div className="border-t border-gray-200 pt-4">
-                    <p className="text-gray-500">Version Notes</p>
-                    <p className="mt-1 text-gray-900">{latestVersion.notes}</p>
-                  </div>
+                </>
+              )}
+            </div>
+            
+         
+          </div>
+          
+          {/* Document Information Section */}
+          <div className="border-t border-gray-200 p-6">
+            <div className="space-y-4">
+              <div className="border-b border-gray-200 pb-4">
+                <h3 className="text-lg font-medium text-gray-900">{document.title}</h3>
+                {document.description && (
+                  <p className="mt-1 text-sm text-gray-600">{document.description}</p>
                 )}
               </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500">Department</p>
+                  <Badge variant="secondary" className="mt-1">{document.department}</Badge>
+                </div>
+                
+                {document.machineId && (
+                  <div>
+                    <p className="text-gray-500">Machine ID</p>
+                    <Badge variant="primary" className="mt-1">{document.machineId}</Badge>
+                  </div>
+                )}
+                
+                <div>
+                  <p className="text-gray-500">Version</p>
+                  <Badge variant="success" className="mt-1">v{versionNumber}</Badge>
+                </div>
+                
+                <div>
+                  <p className="text-gray-500">Last Updated</p>
+                  <p className="font-medium text-gray-900 mt-1">
+                    {new Date(document.updatedAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              
+              {latestVersion && latestVersion.notes && (
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-gray-500">Version Notes</p>
+                  <p className="mt-1 text-gray-900">{latestVersion.notes}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
         
-        <div className="mt-6 bg-blue-50 rounded-lg p-4 flex items-start">
-          <div className="flex-shrink-0 mt-0.5">
-            <Info className="h-5 w-5 text-blue-700" />
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-blue-800">Document Information</h3>
-            <p className="mt-1 text-sm text-blue-700">
-              You're viewing this document via QR code {qrId}. Your access has been logged for security purposes.
-            </p>
-          </div>
-        </div>
       </main>
     </div>
   );
